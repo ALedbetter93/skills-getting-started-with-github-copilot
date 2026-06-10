@@ -4,14 +4,59 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  function buildParticipantSection(activityName, participants) {
+    const section = document.createElement("div");
+    section.className = "participants-section";
+
+    const title = document.createElement("strong");
+    title.textContent = "Participants:";
+    section.appendChild(title);
+
+    if (participants.length > 0) {
+      const list = document.createElement("ul");
+      list.className = "participants-list";
+
+      participants.forEach((participant) => {
+        const listItem = document.createElement("li");
+        listItem.className = "participant-item";
+
+        const participantText = document.createElement("span");
+        participantText.className = "participant-email";
+        participantText.textContent = participant;
+
+        const removeButton = document.createElement("button");
+        removeButton.type = "button";
+        removeButton.className = "participant-remove";
+        removeButton.dataset.activity = activityName;
+        removeButton.dataset.email = participant;
+        removeButton.title = `Remove ${participant}`;
+        removeButton.textContent = "✕";
+
+        listItem.appendChild(participantText);
+        listItem.appendChild(removeButton);
+        list.appendChild(listItem);
+      });
+
+      section.appendChild(list);
+    } else {
+      const noParticipants = document.createElement("p");
+      noParticipants.className = "no-participants";
+      noParticipants.textContent = "No participants yet";
+      section.appendChild(noParticipants);
+    }
+
+    return section;
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
       const response = await fetch("/activities");
       const activities = await response.json();
 
-      // Clear loading message
+      // Clear loading message and repopulate activity selector
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -27,6 +72,7 @@ document.addEventListener("DOMContentLoaded", () => {
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
         `;
 
+        activityCard.appendChild(buildParticipantSection(name, details.participants));
         activitiesList.appendChild(activityCard);
 
         // Add option to select dropdown
@@ -62,6 +108,7 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
@@ -81,6 +128,43 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  activitiesList.addEventListener("click", async (event) => {
+    const removeButton = event.target.closest(".participant-remove");
+    if (!removeButton) return;
+
+    const activityName = removeButton.dataset.activity;
+    const email = removeButton.dataset.email;
+
+    if (!activityName || !email) return;
+
+    try {
+      const response = await fetch(
+        `/activities/${encodeURIComponent(activityName)}/participants?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" }
+      );
+
+      const result = await response.json();
+      if (response.ok) {
+        messageDiv.textContent = result.message;
+        messageDiv.className = "success";
+        fetchActivities();
+      } else {
+        messageDiv.textContent = result.detail || "An error occurred";
+        messageDiv.className = "error";
+      }
+    } catch (error) {
+      messageDiv.textContent = "Failed to remove participant. Please try again.";
+      messageDiv.className = "error";
+      console.error("Error removing participant:", error);
+    }
+
+    messageDiv.classList.remove("hidden");
+    setTimeout(() => {
+      messageDiv.classList.add("hidden");
+    }, 5000);
+  });
+
   // Initialize app
   fetchActivities();
 });
+
